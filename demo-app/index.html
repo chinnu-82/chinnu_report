@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimbus Store (demo)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #f6f5fb; color: #1b1a22; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 28px; background: #1b1a22; color: #fff; }
+  header b { font-size: 18px; }
+  header .sp { flex: 1; }
+  header button { background: #7c5cff; color: #fff; border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  main { max-width: 980px; margin: 28px auto; padding: 0 20px; }
+  .panel { background: #fff; border-radius: 14px; padding: 22px; box-shadow: 0 6px 24px -12px rgba(0,0,0,.2); margin-bottom: 18px; }
+  input { font: inherit; padding: 9px 12px; border: 1px solid #ccc; border-radius: 8px; width: 100%; margin: 4px 0 12px; }
+  .btn { background: #7c5cff; color: #fff; border: 0; padding: 10px 16px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .product { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 4px 16px -10px rgba(0,0,0,.25); }
+  .product .img { height: 90px; border-radius: 8px; margin-bottom: 10px; }
+  .hidden { display: none; }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: #0ca30c; color: #fff; padding: 10px 16px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 0; }
+  .total { font-size: 20px; font-weight: 700; }
+</style>
+</head>
+<body>
+<header><b>☁ Nimbus Store</b><span class="sp"></span><span id="user"></span><button id="cart-btn" data-testid="cart-button">Cart (<span id="cart-count">0</span>)</button></header>
+<main>
+  <section id="login" class="panel">
+    <h2>Sign in</h2>
+    <label>Email <input id="email" type="email" placeholder="you@example.com"></label>
+    <label>Password <input id="password" type="password"></label>
+    <button class="btn" id="login-btn">Sign in</button>
+    <p id="login-error" style="color:#d03b3b" class="hidden">Invalid email or password</p>
+  </section>
+
+  <section id="shop" class="hidden">
+    <div class="panel"><input id="search" placeholder="Search products…" aria-label="Search products"></div>
+    <div class="grid" id="products"></div>
+  </section>
+
+  <section id="checkout" class="panel hidden" data-testid="checkout">
+    <h2>Checkout</h2>
+    <table id="lines"></table>
+    <label>Coupon <input id="coupon" placeholder="Coupon code"></label>
+    <button class="btn" id="apply">Apply coupon</button>
+    <p>Total: <span class="total" data-testid="total">$0</span></p>
+    <button class="btn" id="pay">Pay now</button>
+  </section>
+  <img src="missing-hero-banner.png" alt="" style="display:none">
+</main>
+<div id="toast" class="hidden"></div>
+<script>
+  const PRODUCTS = [
+    { id: 1, name: 'Cloud Hoodie', price: 60, color: '#b9a8ff' },
+    { id: 2, name: 'Storm Mug', price: 25, color: '#8fd3fe' },
+    { id: 3, name: 'Rainbow Socks', price: 15, color: '#ffb3c7' },
+    { id: 4, name: 'Thunder Cap', price: 30, color: '#ffd28a' },
+    { id: 5, name: 'Mist Bottle', price: 20, color: '#a5e6c8' },
+    { id: 6, name: 'Sky Notebook', price: 12, color: '#c9c3ff' },
+  ];
+  const cart = [];
+  const $ = (s) => document.querySelector(s);
+  console.error('Analytics script failed to load: blocked by client');
+
+  $('#login-btn').onclick = () => {
+    if ($('#password').value !== 'secret') { $('#login-error').classList.remove('hidden'); return; }
+    $('#login').classList.add('hidden');
+    $('#shop').classList.remove('hidden');
+    $('#user').textContent = $('#email').value;
+    render('');
+  };
+  $('#search').oninput = (e) => render(e.target.value);
+
+  function render(q) {
+    $('#products').innerHTML = PRODUCTS.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).map((p) => `
+      <div class="product" data-testid="product">
+        <div class="img" style="background:${p.color}"></div>
+        <b>${p.name}</b><div>$${p.price}</div>
+        <button class="btn" data-add="${p.id}">Add to cart</button>
+      </div>`).join('');
+  }
+  document.addEventListener('click', (e) => {
+    const id = e.target.dataset && e.target.dataset.add;
+    if (!id) return;
+    cart.push(PRODUCTS.find((p) => p.id === +id));
+    $('#cart-count').textContent = cart.length;
+    toast('Added to cart');
+  });
+  $('#cart-btn').onclick = () => {
+    $('#shop').classList.add('hidden');
+    $('#checkout').classList.remove('hidden');
+    $('#lines').innerHTML = cart.map((p) => `<tr><td>${p.name}</td><td style="text-align:right">$${p.price}</td></tr>`).join('');
+    total(0);
+  };
+  $('#apply').onclick = () => {
+    // Bug on purpose: the SAVE10 coupon is recognised but never applied.
+    if ($('#coupon').value === 'SAVE10') toast('Coupon applied');
+    total(0);
+  };
+  $('#pay').onclick = () => {
+    setTimeout(() => { throw new Error('PaymentWidget is not defined'); }, 0);
+  };
+  function total(discount) {
+    const sum = cart.reduce((s, p) => s + p.price, 0);
+    $('[data-testid=total]').textContent = `$${sum - discount}`;
+  }
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 1500);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "name": "aurora-report",
+  "version": "1.0.0",
+  "description": "A stunning, story-driven test report for Playwright: step recording, screenshots, videos, plain-English failure analysis and charts.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "bin": {
+    "aurora-report": "bin/aurora-report.js"
+  },
+  "files": [
+    "src",
+    "bin"
+  ],
+  "scripts": {
+    "test": "playwright test",
+    "report": "node bin/aurora-report.js open"
+  },
+  "keywords": [
+    "playwright",
+    "reporter",
+    "test-report",
+    "html-report",
+    "screenshots",
+    "video"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chinnu-82/chinnu_report.git"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.40.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}
