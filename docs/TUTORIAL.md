@@ -4,6 +4,8 @@ A hands-on tour for people who are new to Aurora Report — and new to test repo
 
 **Time:** about 30 minutes · **You need:** [Node.js](https://nodejs.org) 18+ and this repository.
 
+> 📄 **Prefer to print or read offline?** [Download the PDF](Aurora-Report-Tutorial.pdf) — the same tutorial, 30 pages, with the answers to the exercises shown.
+>
 > Looking for the full reference instead? See [GUIDE.md](GUIDE.md).
 
 ---
