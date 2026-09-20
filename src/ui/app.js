@@ -814,9 +814,17 @@
     const h = stability[t.id] || [];
     if (h.length < 2) return '';
     const passes = h.filter((x) => x.o === 'p').length;
+    const flakies = h.filter((x) => x.o === 'k').length;
     const fails = h.filter((x) => x.o === 'f').length;
-    const rate = passes / h.length;
-    const verdict = rate === 1 ? ['passed', 'Rock solid'] : rate >= 0.8 ? ['flaky', 'Mostly stable'] : ['failed', 'Unstable'];
+    const green = (passes + flakies) / h.length;
+    const verdict = fails === 0 && flakies === 0 ? ['passed', 'Rock solid']
+      : fails === 0 ? ['flaky', 'Passes, but needs retries']
+      : green >= 0.8 ? ['flaky', 'Mostly stable'] : ['failed', 'Unstable'];
+    const summary = [
+      passes ? `passed <b>${passes}</b>` : '',
+      flakies ? `passed after a retry <b>${flakies}</b>` : '',
+      fails ? `failed <b>${fails}</b>` : '',
+    ].filter(Boolean).join(' · ');
     const cells = h.map((x, i) => {
       const s = x.o === 'p' ? 'passed' : x.o === 'k' ? 'flaky' : 'failed';
       const latest = i === h.length - 1;
@@ -824,7 +832,7 @@
     }).join('');
     return `<section class="card"><div class="card-h"><h3>Stability</h3><span class="sub">last ${plural(h.length, 'run')}</span></div>
       <div class="card-b" style="display:grid;gap:12px">
-        <div class="meta-row">${pill(verdict[0]).replace(STATUS[verdict[0]].label, verdict[1])}<span class="ink2">Passed <b>${passes}</b> of ${h.length} runs${fails ? ` · failed ${fails}` : ''}</span></div>
+        <div class="meta-row">${pill(verdict[0]).replace(STATUS[verdict[0]].label, verdict[1])}<span class="ink2">Of the last ${h.length} runs: ${summary}</span></div>
         <div style="display:flex;gap:4px;flex-wrap:wrap">${cells}</div>
         <div class="muted" style="font-size:12px;display:flex;gap:10px;align-items:center">Duration per run ${spark(h.map((x) => x.d || 0), { w: Math.min(360, h.length * 18), h: 32 })}</div>
       </div></section>`;
