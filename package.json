@@ -14,7 +14,7 @@
   "scripts": {
     "test": "playwright test",
     "report": "node bin/aurora-report.js open",
-    "docs:pdf": "node tools/make-pdf.js docs/TUTORIAL.md docs/Aurora-Report-Tutorial.pdf"
+    "docs:pdf": "node tools/make-pdf.js docs/TUTORIAL.md docs/Aurora-Report-Tutorial.pdf && node tools/make-pdf.js docs/GUIDE.md docs/Aurora-Report-Guide.pdf"
   },
   "keywords": [
     "playwright",

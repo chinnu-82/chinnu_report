@@ -16,20 +16,38 @@ const { marked } = require('marked');
 const { chromium } = require('@playwright/test');
 const { pathToFileURL } = require('url');
 
-const [, , inArg, outArg] = process.argv;
-const SRC = path.resolve(inArg || 'docs/TUTORIAL.md');
-const OUT = path.resolve(outArg || 'docs/Aurora-Report-Tutorial.pdf');
+const args = process.argv.slice(2);
+const positional = args.filter((a) => !a.startsWith('--'));
+const flag = (name) => {
+  const hit = args.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : null;
+};
+
+const SRC = path.resolve(positional[0] || 'docs/TUTORIAL.md');
+const OUT = path.resolve(positional[1] || 'docs/Aurora-Report-Tutorial.pdf');
 const PKG = require('../package.json');
+
+const REPO = 'github.com/chinnu-82/chinnu_report';
+const SUBTITLES = {
+  'TUTORIAL.md': 'A hands-on tutorial for Playwright test reports',
+  'GUIDE.md': 'The complete guide to using it in your project',
+};
 
 const COVER = {
   title: 'Aurora Report',
-  subtitle: 'A hands-on tutorial for Playwright test reports',
+  subtitle: flag('subtitle') || SUBTITLES[path.basename(SRC)] || 'Documentation',
   version: PKG.version,
-  repo: 'github.com/chinnu-82/chinnu_report',
+  repo: REPO,
 };
 
 /** GitHub's heading-slug rules, so links inside the document still work. */
 const slug = (s) => s.toLowerCase().replace(/[^\w\s-]/g, '').replace(/ /g, '-');
+
+/** Links to sibling documents only work on GitHub, so point them there rather than at a missing file. */
+function absoluteDocLinks(markdown) {
+  return markdown.replace(/\]\((?!https?:|#)([A-Za-z0-9._-]+\.(?:md|pdf))(#[^)]*)?\)/g,
+    (_, file, anchor = '') => `](https://${REPO}/blob/main/docs/${file}${anchor})`);
+}
 
 function buildHtml(markdown) {
   const mermaid = [];
@@ -136,7 +154,9 @@ function coverAndToc(markdown) {
   const parts = [...markdown.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())
     .filter((t) => !/^contents$/i.test(t));
   const items = parts.map((t) => {
-    const [head, ...rest] = t.split('—');
+    // Headings already numbered ("## 1. Install") must not be numbered twice by the list counter.
+    const label = t.replace(/^\d+\.\s*/, '');
+    const [head, ...rest] = label.split('—');
     return `<li><a href="#${slug(t)}">${head.trim()}</a>${rest.length ? `<span class="sub">${rest.join('—').trim()}</span>` : ''}</li>`;
   }).join('');
   const today = new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -158,9 +178,12 @@ function coverAndToc(markdown) {
 
 (async () => {
   const markdown = fs.readFileSync(SRC, 'utf8');
-  // The in-page contents list is replaced by the generated one.
-  const withoutToc = markdown.replace(/## Contents\n[\s\S]*?\n---\n/, '');
-  const { html, mermaid } = buildHtml(withoutToc);
+  // The in-page contents list is replaced by the generated one — it appears
+  // as "## Contents" in the tutorial and as "**Contents**" in the guide.
+  const withoutToc = markdown
+    .replace(/## Contents\n[\s\S]*?\n---\n/, '')
+    .replace(/\*\*Contents\*\*\n[\s\S]*?\n---\n/, '');
+  const { html, mermaid } = buildHtml(absoluteDocLinks(withoutToc));
 
   const page = `<!doctype html><html><head><meta charset="utf-8">
     <base href="${pathToFileURL(path.dirname(SRC)).href}/">

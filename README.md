@@ -8,7 +8,7 @@ npx playwright test   →   aurora-report/index.html
 
 🎓 **New here?** Start with the [Tutorial](docs/TUTORIAL.md) — run the demo and investigate a real failure in 30 minutes, with screenshots and flowcharts. Also available as a [printable PDF](docs/Aurora-Report-Tutorial.pdf).
 
-📘 **Adding it to your own project?** Read the full guide with copy-paste examples: [docs/GUIDE.md](docs/GUIDE.md).
+📘 **Adding it to your own project?** Read the full guide with copy-paste examples: [docs/GUIDE.md](docs/GUIDE.md), also available as a [printable PDF](docs/Aurora-Report-Guide.pdf).
 
 ## Why Aurora?
 

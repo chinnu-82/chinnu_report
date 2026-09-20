@@ -2,6 +2,8 @@
 
 This guide shows how to add Aurora Report to an existing Playwright project and get the most out of it. Every section has examples you can copy.
 
+> 📄 **Prefer to print or read offline?** [Download the PDF](Aurora-Report-Guide.pdf) — the same guide, 45 pages.
+>
 > New to Aurora? The [Tutorial](TUTORIAL.md) walks you through the demo report first, with screenshots and flowcharts. This guide is the reference you come back to.
 
 **Contents**
