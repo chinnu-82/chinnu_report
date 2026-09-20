@@ -465,11 +465,107 @@ Name each step after **what should be true afterwards**. Then the story reads li
 
 ```mermaid
 flowchart TD
-    A["1. Build the package<br/>npm pack in this repo"] --> B["2. Install the .tgz<br/>in your project"]
-    B --> C["3. Wrap your config<br/>withAurora(...)"]
-    C --> D["4. Change the import in your specs<br/>from '@playwright/test' to 'aurora-report'"]
-    D --> E["5. Run your tests"]
-    E --> F["6. Tune aurora.config.js<br/>title, screenshots, video, links"]
+    A["1. Install it<br/>one npm command"] --> B["2. Wrap your config<br/>withAurora(...)"]
+    B --> C["3. Change the import in your specs<br/>from '@playwright/test' to 'aurora-report'"]
+    C --> D["4. Run your tests"]
+    D --> E["5. Tune aurora.config.js<br/>title, screenshots, video, links"]
+```
+
+### Step 1 — Install it
+
+Aurora is **not on the public npm registry**, so `npm install aurora-report` on its own will not find it. Pick one of these three instead.
+
+```mermaid
+flowchart TD
+    Q["How should my project get Aurora?"] --> A["Straight from GitHub"]
+    Q --> B["Bundled file in my repo"]
+    Q --> C["Our private registry"]
+    A --> A1["npm i -D github:chinnu-82/chinnu_report<br/>simplest · needs GitHub access"]
+    B --> B1["npm pack, commit the .tgz,<br/>install from vendor/ · works offline"]
+    C --> C1["npm publish to Artifactory,<br/>GitHub Packages, Verdaccio…"]
+```
+
+**a) Straight from GitHub — the simplest**
+
+```bash
+npm install --save-dev @playwright/test github:chinnu-82/chinnu_report
+```
+
+It appears in `node_modules` as `aurora-report`. There is no build step. Pin it so upgrades are deliberate:
+
+```bash
+npm install --save-dev github:chinnu-82/chinnu_report#<commit-sha>
+```
+
+**b) A bundled file in your repo — no network needed**
+
+Use this when CI has no access to GitHub, or you want the exact bytes pinned. In a checkout of the report repo:
+
+```bash
+npm pack          # produces aurora-report-1.1.0.tgz
+```
+
+Copy that file into your project (for example `vendor/`), commit it, and point `package.json` at it:
+
+```json
+"devDependencies": {
+  "@playwright/test": "^1.63.0",
+  "aurora-report": "file:vendor/aurora-report-1.1.0.tgz"
+}
+```
+
+Then `npm install`. Anyone who clones your repo gets the reporter with no extra steps — this is what the [Shopify store example](https://github.com/chinnu-82/sample_code_withReport) does.
+
+**c) Your own npm registry**
+
+If your team runs Artifactory, GitHub Packages or Verdaccio, `npm publish` it there once and install it by name like any other package.
+
+> **You need** Node 18 or newer, and `@playwright/test` 1.40 or newer, which stays your own dependency.
+
+### Step 2 — Wrap your Playwright config
+
+```js
+// playwright.config.js
+const { defineConfig } = require('@playwright/test');
+const { withAurora } = require('aurora-report');
+
+module.exports = withAurora(
+  defineConfig({ testDir: './tests' }),
+  { title: 'My App' },
+);
+```
+
+Your existing reporters and `use` settings are kept.
+
+### Step 3 — Change the import in your specs
+
+```diff
+- const { test, expect } = require('@playwright/test');
++ const { test, expect } = require('aurora-report');
+```
+
+Your tests appear in the report either way. The import change is what gives you the `report` fixture — steps, highlighted screenshots, soft checks — plus automatic capture of console errors, page crashes and failed requests.
+
+### Step 4 — Run
+
+```bash
+npx playwright test
+npx aurora-report open
+```
+
+### Step 5 — Tune it
+
+Create `aurora.config.js` when you want to change the title, the accent colour, how much is captured, or where reports go:
+
+```js
+const { defineAuroraConfig } = require('aurora-report');
+
+module.exports = defineAuroraConfig({
+  title: 'My App — E2E',
+  theme: { accent: '#1f8a70' },
+  timestampedRuns: true,   // keep every run in its own dated folder
+  capture: { stepScreenshots: 'on', video: 'retain-on-failure' },
+});
 ```
 
 Every step, with copy-paste examples for JavaScript, TypeScript and ES modules, is in **[GUIDE.md](GUIDE.md)**:

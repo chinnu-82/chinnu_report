@@ -28,41 +28,52 @@ This guide shows how to add Aurora Report to an existing Playwright project and 
 
 ## 1. Install
 
-Aurora is not published to npm yet, so install it from a package file.
+Aurora is not on the public npm registry, so `npm install aurora-report` on its own will not find it. Pick one of these three.
 
-**Recommended: install a packed tarball**
+**a) Straight from GitHub — the simplest**
 
-In the Aurora folder:
+```bash
+npm install --save-dev @playwright/test github:chinnu-82/chinnu_report
+```
+
+It lands in `node_modules` as `aurora-report`, with no build step. Pin it so upgrades are deliberate:
+
+```bash
+npm install --save-dev github:chinnu-82/chinnu_report#<commit-sha>
+```
+
+**b) A bundled tarball — no network needed, exact bytes pinned**
+
+In a checkout of the Aurora repo:
 
 ```bash
 git clone https://github.com/chinnu-82/chinnu_report.git
 cd chinnu_report
-npm pack
-# creates aurora-report-1.0.0.tgz
+npm pack          # creates aurora-report-1.1.0.tgz
 ```
 
-In your project:
-
-```bash
-npm install --save-dev @playwright/test C:\path\to\aurora-report-1.0.0.tgz
-```
-
-You can also commit the `.tgz` into your repository (for example `tools/aurora-report-1.0.0.tgz`) so the whole team and CI use the same version:
+Copy that file into your project (for example `vendor/`), commit it, and reference it with a **relative** path so it works on every machine:
 
 ```json
 {
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "aurora-report": "file:tools/aurora-report-1.0.0.tgz"
+    "@playwright/test": "^1.63.0",
+    "aurora-report": "file:vendor/aurora-report-1.1.0.tgz"
   }
 }
 ```
 
-> **Avoid `npm link` and `"file:../TestReport"` folder links.** They point at Aurora's own `node_modules`, which can load a second copy of Playwright and fail with "Requiring @playwright/test second time". A `.tgz` install doesn't have this problem.
+Then run `npm install`. Anyone cloning your repo gets the reporter with no extra steps. The [Shopify store example](https://github.com/chinnu-82/sample_code_withReport) is set up this way.
+
+**c) Your own npm registry**
+
+With Artifactory, GitHub Packages or Verdaccio, `npm publish` it once and install it by name like any other dependency.
+
+> **Avoid `npm link` and folder links such as `"file:../TestReport"`.** They point at Aurora's own `node_modules`, which can load a second copy of Playwright and fail with "Requiring @playwright/test second time". The options above don't have this problem.
 
 Requirements: Node 18 or newer, and `@playwright/test` 1.40 or newer. Aurora was tested with 1.63.
 
-To upgrade later, run `npm pack` again in the Aurora folder and reinstall the new `.tgz`.
+To upgrade later: re-run the GitHub install, or `npm pack` a fresh tarball and reinstall it.
 
 ---
 
