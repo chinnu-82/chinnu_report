@@ -15,6 +15,13 @@ const DEFAULTS = {
   logo: null,
   /** Where the report is written (relative to the project root). */
   outputDir: 'aurora-report',
+  /**
+   * Keep every run instead of overwriting: each run is written to
+   * <outputDir>/<timestamp>/index.html, and <outputDir>/index.html lists them all.
+   */
+  timestampedRuns: false,
+  /** How many timestamped run folders to keep. Older ones are deleted. 0 keeps everything. */
+  keepRuns: 30,
   /** 'always' | 'never' | 'on-failure' — open the report in your browser when the run ends. */
   open: 'on-failure',
   /** Embed every screenshot/video into index.html so the report is a single portable file. */

@@ -955,6 +955,8 @@ module.exports = defineAuroraConfig({
   subtitle: 'Nightly regression',        // defaults to the run date
   logo: './assets/logo.svg',             // file path (embedded) or https:// URL
   outputDir: 'aurora-report',
+  timestampedRuns: false,                // true = keep every run in its own <timestamp> folder
+  keepRuns: 30,                          // how many run folders to keep (0 = keep them all)
   open: 'on-failure',                    // 'always' | 'never' | 'on-failure' (never opens when CI is set)
   singleFile: false,                     // true = one HTML file with every screenshot and video embedded
 
@@ -1054,6 +1056,36 @@ environment: {
 singleFile: true,
 capture: { video: 'off', stepScreenshots: 'on-failure' }, // keeps the file small
 ```
+
+### Keep every run instead of overwriting it
+
+By default each run replaces the previous report. Turn on `timestampedRuns` to keep a history of reports on disk:
+
+```js
+timestampedRuns: true,
+keepRuns: 30,   // older folders are deleted; 0 keeps everything
+```
+
+Your report folder then looks like this:
+
+```
+aurora-report/
+  index.html                 ← list of every run, newest first
+  history.json               ← shared, so trends still work
+  2026-09-20_09-14-02/
+    index.html               ← the report for that run
+    results.json
+    assets/                  ← its own screenshots, videos and traces
+  2026-09-20_11-47-35/
+  2026-09-21_08-03-11/
+```
+
+- Folder names are local time, `YYYY-MM-DD_HH-MM-SS`, so they sort oldest to newest.
+- Each folder is self-contained: copy one anywhere and it still works.
+- `npx aurora-report open` opens the **newest** run; `npx aurora-report open --all` opens the list.
+- Trends and stability keep working, because `history.json` stays at the top level and outlives pruned folders.
+
+Handy on CI: publish the whole `aurora-report/` folder and every build keeps its own report.
 
 ### Separate reports per environment
 
@@ -1384,12 +1416,14 @@ Useful fields:
 
 **The report folder is large**
 - Use `capture.video: 'retain-on-failure'` and `stepScreenshots: 'on-failure'`, and set `trace` to `'on-first-retry'`.
+- With `timestampedRuns`, lower `keepRuns` so old run folders are deleted sooner.
 
 **Where are the files?**
-- `aurora-report/index.html` is the report.
-- `aurora-report/assets/` holds screenshots, videos and traces.
+- `aurora-report/index.html` is the report — or, with `timestampedRuns`, the list of all runs.
+- `aurora-report/<timestamp>/index.html` is a single run's report when `timestampedRuns` is on.
+- `aurora-report/assets/` holds screenshots, videos and traces (inside the run folder when timestamped).
 - `aurora-report/results.json` holds the data.
-- `aurora-report/history.json` holds past runs.
+- `aurora-report/history.json` holds past runs, and always stays at the top level.
 
 Add `aurora-report/` to `.gitignore`.
 

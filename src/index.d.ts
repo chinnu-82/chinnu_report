@@ -8,6 +8,10 @@ export interface AuroraOptions {
   /** Path or URL of a logo image. */
   logo?: string | null;
   outputDir?: string;
+  /** Write each run to <outputDir>/<timestamp>/ and list them all at <outputDir>/index.html. */
+  timestampedRuns?: boolean;
+  /** How many timestamped run folders to keep (0 = keep everything). */
+  keepRuns?: number;
   open?: 'always' | 'never' | 'on-failure';
   /** Embed all media into index.html (one portable file). */
   singleFile?: boolean;

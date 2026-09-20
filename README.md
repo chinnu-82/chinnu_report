@@ -17,6 +17,7 @@ npx playwright test   →   aurora-report/index.html
 | Setup | 1 line in `playwright.config` | CLI + results dir + generate step | Java/.NET-first, adapters |
 | Opens without a server | ✅ plain `index.html` | ❌ needs `allure open` / web server | ✅ |
 | Single portable file | ✅ `singleFile: true` | ❌ | ❌ |
+| **Keep every run in its own timestamped folder** | ✅ `timestampedRuns: true` | history plugin | ❌ |
 | **Plain-English failure analysis** ("expected $75 but got $85", fix hints) | ✅ | ❌ | ❌ |
 | **Failures grouped by root cause** | ✅ automatic | manual category rules | ❌ |
 | **Browser console, page errors, failed requests** captured with zero code | ✅ | ❌ | ❌ |

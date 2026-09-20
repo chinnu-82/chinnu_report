@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const { resolveConfig } = require('./config');
 const { analyzeError, stripAnsi, CATEGORY_LABELS } = require('./errors');
 const { renderReport } = require('./render');
+const { renderRunsIndex } = require('./runs-index');
 const { STORY_ATTACHMENT, DIAGNOSTICS_ATTACHMENT } = require('./fixtures-constants');
 
 const MIME_EXT = {
@@ -33,9 +34,12 @@ class AuroraReporter {
     this.rootDir = config.rootDir || process.cwd();
     this.cfg = resolveConfig(this.options, process.cwd());
     this.outDir = path.resolve(process.cwd(), this.cfg.outputDir);
-    this.assetsDir = path.join(this.outDir, 'assets');
-    this.fullConfig = config;
     this.startedAt = Date.now();
+    // With timestampedRuns, every run gets its own folder so earlier reports are kept.
+    this.runFolder = this.cfg.timestampedRuns ? runFolderName(new Date(this.startedAt)) : '';
+    this.runDir = this.runFolder ? path.join(this.outDir, this.runFolder) : this.outDir;
+    this.assetsDir = path.join(this.runDir, 'assets');
+    this.fullConfig = config;
     this.totalPlanned = suite.allTests().length;
 
     fs.rmSync(this.assetsDir, { recursive: true, force: true });
@@ -59,22 +63,55 @@ class AuroraReporter {
   async onEnd(fullResult) {
     try {
       const data = this.buildData(fullResult);
-      fs.mkdirSync(this.outDir, { recursive: true });
-      fs.writeFileSync(path.join(this.outDir, 'index.html'), renderReport(data), 'utf8');
-      fs.writeFileSync(path.join(this.outDir, 'results.json'), JSON.stringify(data, null, 2), 'utf8');
+      fs.mkdirSync(this.runDir, { recursive: true });
+      fs.writeFileSync(path.join(this.runDir, 'index.html'), renderReport(data), 'utf8');
+      fs.writeFileSync(path.join(this.runDir, 'results.json'), JSON.stringify(data, null, 2), 'utf8');
       // Traces are never embedded, so keep the assets folder when it still holds files.
       if (this.cfg.singleFile && !fs.readdirSync(this.assetsDir).length) fs.rmSync(this.assetsDir, { recursive: true, force: true });
 
-      const file = path.join(this.outDir, 'index.html');
+      const file = path.join(this.runDir, 'index.html');
       const { stats } = data;
       const line = `${stats.passed} passed · ${stats.failed} failed · ${stats.flaky} flaky · ${stats.skipped} skipped`;
-      console.log(`\n  ✨ Aurora report  ${line}\n     ${pathToUrl(file)}\n`);
+      let indexNote = '';
+      if (this.runFolder) {
+        this.pruneOldRuns();
+        indexNote = `\n     all runs: ${pathToUrl(path.join(this.outDir, 'index.html'))}`;
+      }
+      console.log(`\n  ✨ Aurora report  ${line}\n     ${pathToUrl(file)}${indexNote}\n`);
 
       const open = this.cfg.open;
       if (!process.env.CI && (open === 'always' || (open === 'on-failure' && stats.failed > 0))) openInBrowser(file);
     } catch (e) {
       console.error(`[aurora] Failed to write report: ${e.stack}`);
     }
+  }
+
+  /**
+   * Deletes the oldest timestamped run folders and rewrites <outputDir>/index.html,
+   * the page that lists every kept run.
+   */
+  pruneOldRuns() {
+    const keepRuns = this.cfg.keepRuns;
+    let folders = fs.readdirSync(this.outDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && RUN_FOLDER_RE.test(d.name))
+      .map((d) => d.name)
+      .sort(); // the name format sorts chronologically
+
+    if (keepRuns > 0 && folders.length > keepRuns) {
+      for (const old of folders.slice(0, folders.length - keepRuns)) {
+        fs.rmSync(path.join(this.outDir, old), { recursive: true, force: true });
+      }
+      folders = folders.slice(-keepRuns);
+    }
+
+    const known = new Map((this.historyRuns || []).filter((r) => r.folder).map((r) => [r.folder, r]));
+    const runs = folders.map((folder) => known.get(folder) || runSummaryFromDisk(this.outDir, folder)).filter(Boolean);
+
+    fs.writeFileSync(
+      path.join(this.outDir, 'index.html'),
+      renderRunsIndex({ title: this.cfg.title, accent: this.cfg.theme.accent, runs }),
+      'utf8',
+    );
   }
 
   /* ------------------------------------------------------------------ */
@@ -257,7 +294,9 @@ class AuroraReporter {
     hist.runs = [...(hist.runs || []), {
       at: runStart, total: stats.total, passed: stats.passed, failed: stats.failed, flaky: stats.flaky,
       skipped: stats.skipped, duration: stats.duration,
+      ...(this.runFolder ? { folder: this.runFolder } : {}),
     }].slice(-keep);
+    this.historyRuns = hist.runs;
     hist.tests = hist.tests || {};
     for (const t of tests) {
       if (t.outcome === 'skipped') continue;
@@ -402,6 +441,42 @@ function pwVersion() {
   try { return require('@playwright/test/package.json').version; } catch { return 'unknown'; }
 }
 
+/** Local-time folder name like 2026-09-20_14-32-08 — sorts chronologically as text. */
+function runFolderName(date) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`
+    + `_${p(date.getHours())}-${p(date.getMinutes())}-${p(date.getSeconds())}`;
+}
+
+const RUN_FOLDER_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
+
+/** Rebuilds a run summary from a folder that history.json no longer covers. */
+function runSummaryFromDisk(outDir, folder) {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(outDir, folder, 'results.json'), 'utf8'));
+    const { stats, meta } = data;
+    return {
+      folder, at: meta.startedAt, total: stats.total, passed: stats.passed,
+      failed: stats.failed, flaky: stats.flaky, skipped: stats.skipped, duration: stats.duration,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The newest timestamped run folder inside a report directory, if there is one. */
+function latestRunDir(outDir) {
+  try {
+    const folders = fs.readdirSync(outDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && RUN_FOLDER_RE.test(d.name))
+      .map((d) => d.name)
+      .sort();
+    return folders.length ? path.join(outDir, folders[folders.length - 1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 function pathToUrl(file) {
   return `file:///${file.replace(/\\/g, '/').replace(/^\//, '')}`;
 }
@@ -416,3 +491,5 @@ function openInBrowser(file) {
 
 module.exports = AuroraReporter;
 module.exports.openInBrowser = openInBrowser;
+module.exports.latestRunDir = latestRunDir;
+module.exports.runFolderName = runFolderName;
