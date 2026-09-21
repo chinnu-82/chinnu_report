@@ -329,9 +329,30 @@ Aurora recorded, with no code in the test:
 
 - **💥 Uncaught page errors** — `PaymentWidget is not defined`. A real JavaScript crash in the app that the test never checked for.
 - **🖥 Console errors** — a failed analytics script.
-- **🌐 Failed network requests** — a missing image, `net::ERR_FILE_NOT_FOUND`.
+- **🌐 Failed network requests** — a missing image, and the shop's recommendations API answering `500`.
 
 The test only checked that a button could be clicked, so it passed. The report shows the crash anyway.
+
+### What a failed API call shows
+
+Click any failed request to open it. The request that went out is on the left, the response that came back is on the right:
+
+![A failed API call with its request and response](images/21-network-request-response.png)
+
+- **Request** — method, URL, headers and the payload your app sent, with JSON pretty-printed
+- **Response** — status, headers, the body, and how long it took
+
+That is usually enough to tell whether the app sent the wrong thing or the server answered badly, without re-running the test.
+
+Secrets are hidden automatically: `authorization`, `cookie` and `x-api-key` headers show as `«hidden»` in the report.
+
+> **Too much noise?** Analytics and pixel requests fail constantly and tell you nothing. Leave them out in `aurora.config.js` — the demo does exactly this, which is why its `/analytics/collect` call never appears:
+>
+> ```js
+> capture: {
+>   network: { exclude: ['**/analytics/**', 'google-analytics.com', /facebook\.com\/tr/] },
+> },
+> ```
 
 > **Tip.** When someone says "but the tests are green", this panel is where you look.
 

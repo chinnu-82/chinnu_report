@@ -629,6 +629,78 @@ Turn individual captures off in the config:
 capture: { console: false, network: false, pageErrors: true }
 ```
 
+### Failed requests: what went out and what came back
+
+Every failed request is recorded with both sides of the conversation, so you can debug an API failure without re-running anything:
+
+| Request | Response |
+|---|---|
+| Method and URL | Status and status text |
+| Headers (secrets hidden) | Headers (secrets hidden) |
+| Body / payload, JSON pretty-printed | Body, JSON pretty-printed |
+| Resource type | How long it took |
+
+In the report they appear under **Browser diagnostics → Failed network requests**. Each row expands to show the request on the left and the response on the right.
+
+"Failed" means an HTTP status of 400 or higher, or a request that never completed at all (DNS failure, connection refused, TLS error) — those show `FAILED` with the browser's error instead of a status.
+
+### Leaving noisy APIs out
+
+Analytics beacons, pixels and third-party scripts fail all the time and tell you nothing about your app. Exclude them:
+
+```js
+capture: {
+  network: {
+    exclude: [
+      '**/analytics/**',              // * wildcard path
+      'google-analytics.com',         // plain substring, matched anywhere in the URL
+      'googletagmanager.com',
+      /facebook\.com\/tr/,            // RegExp
+      (url) => url.endsWith('.gif'),  // your own rule
+    ],
+  },
+},
+```
+
+Patterns can be:
+
+| Pattern | Matches |
+|---|---|
+| `'checkout'` | any URL containing "checkout" |
+| `'**/analytics/**'` | any URL with an `/analytics/` path segment |
+| `'https://cdn.*.example.com/*'` | one path segment under any `cdn.*` host |
+| `/\/v1\/(ads|beacon)\//` | a regular expression |
+| `(url) => url.includes('?debug=')` | anything you can express in code |
+
+To record **only** your own API instead, use `include`:
+
+```js
+network: { include: ['api.my-app.com', '/api/'] }
+```
+
+`include` is applied first, then `exclude`. A request is recorded only if it passes both.
+
+> **RegExp and function patterns must live in `aurora.config.js`**, because they survive only when the config file is loaded by the worker. Options passed through `withAurora()` are serialised as JSON, so use string patterns there.
+
+### Keeping secrets out of the report
+
+Authorization headers, cookies and API keys are replaced with `«hidden»` before anything is written. The default list is:
+
+```js
+network: {
+  redactHeaders: ['authorization', 'proxy-authorization', 'cookie', 'set-cookie',
+                  'x-api-key', 'x-auth-token', 'x-csrf-token'],
+}
+```
+
+Add your own header names to extend it. Bodies are **not** redacted, so if your payloads contain secrets, turn the bodies off:
+
+```js
+network: { requestBody: false, responseBody: false }
+```
+
+Bodies are cut off at `maxBodySize` (4 KB by default), and images, video, audio and font responses are never read.
+
 ### How failures are explained
 
 Aurora reads Playwright's error and turns it into a card with a plain-English title, an explanation, the Expected and Received values, the element, fix hints and the failing line of code.
@@ -987,7 +1059,15 @@ module.exports = defineAuroraConfig({
     trace: 'retain-on-failure',          // applied by withAurora()
     console: true,
     pageErrors: true,
-    network: true,
+    network: {                             // true = defaults, false = off
+      failedStatus: 400,                   // responses at or above this count as failures
+      requestHeaders: true, requestBody: true,
+      responseHeaders: true, responseBody: true,
+      maxBodySize: 4096,                   // bodies are cut off after this many bytes
+      redactHeaders: ['authorization', 'cookie', 'x-api-key'],
+      exclude: ['**/analytics/**', /google-analytics/],  // noisy APIs to leave out
+      include: [],                         // when set, only these are recorded
+    },
   },
 
   charts: {

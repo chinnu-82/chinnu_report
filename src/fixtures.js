@@ -4,6 +4,10 @@ const base = require('@playwright/test');
 const { resolveConfig } = require('./config');
 const { stripAnsi } = require('./errors');
 const { STORY_ATTACHMENT, DIAGNOSTICS_ATTACHMENT } = require('./fixtures-constants');
+const { resolveNetworkOptions, shouldRecord, describeRequest, describeResponse } = require('./network');
+
+/** Response bodies being read right now, awaited before the diagnostics are attached. */
+const inFlight = new Set();
 
 const STORY_TYPE = 'application/vnd.aurora.story+json';
 const DIAG_TYPE = 'application/vnd.aurora.diagnostics+json';
@@ -197,18 +201,43 @@ function watchPage(page, diag, started) {
   if (cfg.pageErrors) {
     page.on('pageerror', (err) => add(diag.pageErrors, { message: err.message, stack: err.stack }));
   }
-  if (cfg.network) {
-    page.on('requestfailed', (req) => {
-      const failure = req.failure();
-      if (failure && /ERR_ABORTED/.test(failure.errorText)) return;
-      add(diag.network, { method: req.method(), url: req.url(), status: 0, error: failure ? failure.errorText : 'failed', resource: req.resourceType() });
-    });
+  const net = resolveNetworkOptions(cfg.network);
+  if (net.enabled) {
+    if (net.requestFailures) {
+      page.on('requestfailed', (req) => {
+        const failure = req.failure();
+        if (failure && /ERR_ABORTED/.test(failure.errorText)) return;
+        if (!shouldRecord(req.url(), req, net)) return;
+        add(diag.network, {
+          ...describeRequest(req, net),
+          status: 0,
+          error: failure ? failure.errorText : 'request failed',
+        });
+      });
+    }
     page.on('response', (res) => {
-      if (res.status() < 400) return;
+      if (res.status() < net.failedStatus) return;
       const req = res.request();
-      add(diag.network, { method: req.method(), url: res.url(), status: res.status(), error: res.statusText(), resource: req.resourceType() });
+      if (!shouldRecord(res.url(), req, net)) return;
+      // Reading the body is async, so remember the promise and wait for it before the test ends.
+      const pending = (async () => {
+        const entry = { ...describeRequest(req, net), ...(await describeResponse(res, net)) };
+        entry.error = entry.statusText || `HTTP ${entry.status}`;
+        add(diag.network, entry);
+      })().catch(() => {});
+      inFlight.add(pending);
+      pending.finally(() => inFlight.delete(pending));
     });
   }
+}
+
+/** Response bodies are still being read when the test finishes; give them a moment. */
+async function settleNetwork(timeoutMs = 2000) {
+  if (!inFlight.size) return;
+  await Promise.race([
+    Promise.allSettled([...inFlight]),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
 }
 
 const test = base.test.extend({
@@ -233,6 +262,7 @@ const test = base.test.extend({
         if (html) await testInfo.attach('aurora-failure-html', { body: html, contentType: 'text/html' });
       }
     }
+    await settleNetwork();
     if (diag.console.length || diag.pageErrors.length || diag.network.length) {
       await testInfo.attach(DIAGNOSTICS_ATTACHMENT, { body: JSON.stringify(diag), contentType: DIAG_TYPE });
     }

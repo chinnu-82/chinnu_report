@@ -37,7 +37,11 @@
   </section>
 
   <section id="shop" class="hidden">
-    <div class="panel"><input id="search" placeholder="Search products…" aria-label="Search products"></div>
+    <div class="panel">
+      <input id="search" placeholder="Search products…" aria-label="Search products">
+      <button class="btn" id="suggest">Suggest something for me</button>
+      <p id="suggest-error" class="hidden" style="color:#d03b3b">Sorry, we could not load suggestions right now.</p>
+    </div>
     <div class="grid" id="products"></div>
   </section>
 
@@ -64,6 +68,26 @@
   const cart = [];
   const $ = (s) => document.querySelector(s);
   console.error('Analytics script failed to load: blocked by client');
+
+  // Background analytics call — noise that a test report should be able to ignore.
+  fetch('analytics/collect?event=page_view').catch(() => {});
+
+  // A real API call that can fail: the test intercepts it and answers with a 500.
+  $('#suggest').onclick = async () => {
+    $('#suggest-error').classList.add('hidden');
+    try {
+      const res = await fetch('api/recommendations', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer super-secret-token' },
+        body: JSON.stringify({ customer: 'ada@nimbus.test', cartSize: cart.length, locale: 'en-GB' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      toast(`We suggest: ${data.product}`);
+    } catch {
+      $('#suggest-error').classList.remove('hidden');
+    }
+  };
 
   $('#login-btn').onclick = () => {
     if ($('#password').value !== 'secret') { $('#login-error').classList.remove('hidden'); return; }

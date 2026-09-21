@@ -2,3 +2,6 @@ node_modules/
 test-results/
 aurora-report/
 playwright-report/
+
+# staged PDF waiting for a locked file to be released
+*.pdf.new

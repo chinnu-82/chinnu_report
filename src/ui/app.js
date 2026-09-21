@@ -802,10 +802,55 @@
           <td>${c.type === 'error' ? '<span style="color:var(--fail-ink);font-weight:600">✕ error</span>' : '<span style="color:var(--flaky-ink);font-weight:600">! warning</span>'}</td>
           <td><span class="mono">${esc(c.text)}</span>${c.source ? `<div class="muted" style="font-size:11.5px">${esc(c.source)}</div>` : ''}</td></tr>`).join('')}</table>`) : ''}
         ${net.length ? section(`🌐 Failed network requests <span class="badge">${net.length}</span>`,
-          `<table class="tbl"><tr><th>At</th><th>Status</th><th>Request</th></tr>${net.map((n) => `<tr><td class="n">+${fmtDur(n.at)}</td>
-          <td><span class="status-code">${n.status || 'ERR'}</span></td>
-          <td><span class="mono">${esc(n.method)} ${esc(n.url)}</span><div class="muted" style="font-size:11.5px">${esc(n.error || '')} · ${esc(n.resource || '')}</div></td></tr>`).join('')}</table>`) : ''}
+          `<div class="net-list">${net.map(networkRow).join('')}</div>`) : ''}
       </div></section>`;
+  }
+
+  /** One failed request: a summary line, expanding to the request and the response. */
+  function networkRow(n) {
+    const headers = (title, map) => {
+      const rows = Object.entries(map || {});
+      if (!rows.length) return '';
+      return `<div class="net-block"><div class="net-k">${title}</div>
+        <table class="tbl net-headers">${rows.map(([k, v]) => `<tr><td class="hk">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
+    };
+    const body = (title, b) => {
+      if (!b || !b.text) return '';
+      return `<div class="net-block"><div class="net-k">${title}
+        <span class="muted" style="font-weight:400">${fmtBytes(b.size)}${b.truncated ? ' · shown up to the size limit' : ''}</span></div>
+        <pre class="codeframe" style="padding:10px 12px">${esc(b.text)}</pre></div>`;
+    };
+    const failed = !n.status;
+    return `<details class="net-item">
+      <summary>
+        <span class="status-code ${failed ? 'err' : ''}">${failed ? 'FAILED' : n.status}</span>
+        <span class="net-method">${esc(n.method || '')}</span>
+        <span class="net-url mono" title="${esc(n.url)}">${esc(n.url)}</span>
+        <span class="muted num">+${fmtDur(n.at)}</span>
+      </summary>
+      <div class="net-body">
+        <div class="net-meta">
+          ${n.error ? `<span class="badge" style="color:var(--fail-ink)">${esc(n.error)}</span>` : ''}
+          ${n.resource ? `<span class="badge">${esc(n.resource)}</span>` : ''}
+          ${n.duration != null ? `<span class="badge">took ${fmtDur(n.duration)}</span>` : ''}
+          ${n.statusText && n.statusText !== n.error ? `<span class="badge">${esc(n.statusText)}</span>` : ''}
+        </div>
+        <div class="net-cols">
+          <div>
+            <div class="net-h">↗ Request</div>
+            ${headers('Headers', n.requestHeaders)}
+            ${body('Body', n.requestBody)}
+            ${!n.requestHeaders && !n.requestBody ? '<div class="muted" style="font-size:12.5px">No request details were recorded.</div>' : ''}
+          </div>
+          <div>
+            <div class="net-h">↘ Response</div>
+            ${failed ? `<div class="muted" style="font-size:12.5px">No response — the request never completed (${esc(n.error || 'failed')}).</div>`
+              : `${headers('Headers', n.responseHeaders)}${body('Body', n.responseBody)}
+                 ${!n.responseHeaders && !n.responseBody ? '<div class="muted" style="font-size:12.5px">No response details were recorded.</div>' : ''}`}
+          </div>
+        </div>
+      </div>
+    </details>`;
   }
 
   /* ---------- stability ---------- */

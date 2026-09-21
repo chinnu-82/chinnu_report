@@ -226,8 +226,11 @@ function coverAndToc(markdown) {
   if (images.length) problems.push(`images that did not load: ${images.join(', ')}`);
   if (rendered !== mermaid.length) problems.push(`diagrams rendered: ${rendered}/${mermaid.length}`);
 
+  // Writing straight to OUT fails if the file is open in a PDF viewer, so build it
+  // beside the target first and then move it into place.
+  const staging = `${OUT}.new`;
   await tab.pdf({
-    path: OUT,
+    path: staging,
     format: 'A4',
     printBackground: true,
     displayHeaderFooter: true,
@@ -237,6 +240,18 @@ function coverAndToc(markdown) {
   });
   await browser.close();
   fs.unlinkSync(tmp);
+
+  try {
+    fs.renameSync(staging, OUT);
+  } catch (e) {
+    if (e.code === 'EBUSY' || e.code === 'EPERM') {
+      console.error(`\n  Could not replace ${path.basename(OUT)} — it is open in another program (a PDF viewer?).`);
+      console.error(`  Close it and run this again. The new file is waiting at:\n    ${staging}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    throw e;
+  }
 
   const kb = (fs.statSync(OUT).size / 1024).toFixed(0);
   console.log(`PDF written: ${OUT} (${kb} KB, ${mermaid.length} diagrams)`);

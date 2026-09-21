@@ -1,6 +1,6 @@
 {
   "name": "aurora-report",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A stunning, story-driven test report for Playwright: step recording, screenshots, videos, plain-English failure analysis and charts.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -37,3 +37,4 @@
     "marked": "^18.0.13"
   }
 }
+

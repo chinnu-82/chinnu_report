@@ -21,6 +21,8 @@ npx playwright test   →   aurora-report/index.html
 | **Plain-English failure analysis** ("expected $75 but got $85", fix hints) | ✅ | ❌ | ❌ |
 | **Failures grouped by root cause** | ✅ automatic | manual category rules | ❌ |
 | **Browser console, page errors, failed requests** captured with zero code | ✅ | ❌ | ❌ |
+| **Failed API calls with request + response** (headers, payload, body) | ✅ | ❌ | ❌ |
+| **Exclude noisy APIs** from the report (analytics, pixels) | ✅ `network.exclude` | ❌ | ❌ |
 | Step screenshots with **element highlighting** | ✅ | manual attach | manual attach |
 | **Story player**: replay a test as a slideshow | ✅ | ❌ | ❌ |
 | Visual-diff slider (expected ⇆ actual) | ✅ | plugin | ❌ |

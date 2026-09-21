@@ -1,9 +1,8 @@
 // @ts-check
-const path = require('path');
-const { pathToFileURL } = require('url');
 const { test, expect } = require('../src');
 
-const APP = pathToFileURL(path.join(__dirname, '..', 'demo-app', 'index.html')).href;
+// The demo shop is served by demo-app/server.js — see webServer in playwright.config.js.
+const APP = '/';
 
 async function login(page, report) {
   await report.step('Open the store', async () => {
@@ -107,6 +106,22 @@ test.describe('Shopping', () => {
     });
     await report.screenshot('Checkout after paying', { highlight: page.getByTestId('checkout') });
     report.note('The uncaught PaymentWidget error is captured automatically in Browser diagnostics.', 'warn');
+  });
+
+  test('a failing recommendations API is reported with its request and response', async ({ page, report }) => {
+    report.feature('Recommendations');
+    report.severity('high');
+
+    report.note('The demo server answers /api/recommendations with a 500 on purpose.');
+    await login(page, report);
+    await report.step('Ask for a suggestion', async () => {
+      await page.getByRole('button', { name: 'Suggest something for me' }).click();
+    });
+    await report.step('The shop apologises instead of breaking', async () => {
+      await expect(page.getByText('could not load suggestions')).toBeVisible();
+    }, { highlight: page.locator('#suggest-error') });
+
+    report.note('The failed POST — its payload and the 500 response body — is in Browser diagnostics. The analytics call is excluded by aurora.config.js.', 'warn');
   });
 
   test('toast confirms item was added', async ({ page, report }, testInfo) => {

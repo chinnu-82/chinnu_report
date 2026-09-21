@@ -51,8 +51,27 @@ const DEFAULTS = {
     console: true,
     /** Record uncaught page exceptions. */
     pageErrors: true,
-    /** Record failed requests and HTTP responses >= 400. */
-    network: true,
+    /**
+     * Record failed requests and HTTP responses >= 400, with the request that went
+     * out and the response that came back. `true` uses the defaults below; `false`
+     * turns it off. See src/network.js for every option.
+     */
+    network: {
+      enabled: true,
+      failedStatus: 400,
+      requestFailures: true,
+      requestHeaders: true,
+      requestBody: true,
+      responseHeaders: true,
+      responseBody: true,
+      maxBodySize: 4096,
+      /** Header values hidden in the report. */
+      redactHeaders: ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token', 'x-csrf-token'],
+      /** URLs left out of the report: substring, * wildcard, RegExp or (url) => boolean. */
+      exclude: [],
+      /** When set, only URLs matching these are recorded. */
+      include: [],
+    },
   },
 
   charts: {

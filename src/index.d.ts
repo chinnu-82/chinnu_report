@@ -25,13 +25,37 @@ export interface AuroraOptions {
     trace?: 'on' | 'off' | 'retain-on-failure' | 'on-first-retry';
     console?: boolean;
     pageErrors?: boolean;
-    network?: boolean;
+    /** true = defaults, false = off, or fine-grained options. */
+    network?: boolean | NetworkCaptureOptions;
   };
   charts?: Partial<Record<'trend' | 'timeline' | 'slowest' | 'suites' | 'failureReasons' | 'projects', boolean>>;
   history?: { enabled?: boolean; keep?: number };
   slowTestThreshold?: number;
   environment?: Record<string, string | number | boolean>;
   links?: { issue?: string; ci?: string };
+}
+
+/** A URL to leave out of (or limit the report to): substring, * wildcard, RegExp, or a predicate. */
+export type UrlPattern = string | RegExp | ((url: string, request?: unknown) => boolean);
+
+export interface NetworkCaptureOptions {
+  enabled?: boolean;
+  /** Responses with this status or higher count as failures (default 400). */
+  failedStatus?: number;
+  /** Also record requests that never got a response (default true). */
+  requestFailures?: boolean;
+  requestHeaders?: boolean;
+  requestBody?: boolean;
+  responseHeaders?: boolean;
+  responseBody?: boolean;
+  /** Bodies longer than this are cut off, in bytes (default 4096). */
+  maxBodySize?: number;
+  /** Header values replaced with "«hidden»" in the report. */
+  redactHeaders?: string[];
+  /** URLs to leave out of the report — analytics, pixels, noisy third parties. */
+  exclude?: UrlPattern[];
+  /** When set, only URLs matching these are recorded. */
+  include?: UrlPattern[];
 }
 
 export interface StepOptions {

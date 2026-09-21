@@ -24,7 +24,23 @@ module.exports = defineAuroraConfig({
     trace: 'retain-on-failure',
     console: true, // browser console errors & warnings
     pageErrors: true, // uncaught exceptions in the page
-    network: true, // failed requests & HTTP >= 400
+
+    // Failed requests are recorded with the request that went out and the
+    // response that came back. Set to `false` to turn the whole thing off.
+    network: {
+      requestBody: true,
+      responseBody: true,
+      maxBodySize: 4096,
+      // Noise nobody wants in a test report — matched by substring, * wildcard,
+      // RegExp or a (url) => boolean function.
+      exclude: [
+        '**/analytics/**',
+        'google-analytics.com',
+        'googletagmanager.com',
+        /facebook\.com\/tr/,
+        'hotjar.com',
+      ],
+    },
   },
 
   charts: { trend: true, timeline: true, slowest: true, suites: true, failureReasons: true, projects: true },
