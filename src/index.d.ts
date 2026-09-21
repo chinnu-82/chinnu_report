@@ -12,6 +12,16 @@ export interface AuroraOptions {
   timestampedRuns?: boolean;
   /** How many timestamped run folders to keep (0 = keep everything). */
   keepRuns?: number;
+  /** Watch the report build up while the tests run. Also enabled with AURORA_LIVE=1; never on CI. */
+  live?: boolean | {
+    enabled?: boolean;
+    /** First port to try; the next free one is used if it is taken (default 4321). */
+    port?: number;
+    /** Open the live page in your browser as soon as the run starts (default true). */
+    open?: boolean;
+    /** Seconds to keep the live server up after the run ends (default 0). */
+    hold?: number;
+  };
   open?: 'always' | 'never' | 'on-failure';
   /** Embed all media into index.html (one portable file). */
   singleFile?: boolean;

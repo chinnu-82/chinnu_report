@@ -1,12 +1,23 @@
 (() => {
   'use strict';
 
-  const DATA = JSON.parse(document.getElementById('aurora-data').textContent);
-  const { meta, stats, tests, clusters, stability } = DATA;
-  const runHistory = DATA.history;
-  const byId = new Map(tests.map((t) => [t.id, t]));
-  const projects = [...new Set(tests.map((t) => t.project))];
-  const allTags = [...new Set(tests.flatMap((t) => t.tags))].sort();
+  const hayCache = new Map(); // declared before applyData() runs, which clears it
+
+  // In live mode the data is replaced while the run is going, so these are rebound
+  // by applyData() instead of being destructured once.
+  let meta; let stats; let tests; let clusters; let stability; let runHistory;
+  let byId; let projects; let allTags;
+
+  function applyData(data) {
+    ({ meta, stats, tests, clusters, stability } = data);
+    runHistory = data.history;
+    byId = new Map(tests.map((t) => [t.id, t]));
+    projects = [...new Set(tests.map((t) => t.project))];
+    allTags = [...new Set(tests.flatMap((t) => t.tags))].sort();
+    hayCache.clear();
+  }
+
+  applyData(JSON.parse(document.getElementById('aurora-data').textContent));
   const app = document.getElementById('app');
 
   const STATUS = {
@@ -115,6 +126,7 @@
           <a data-nav="timeline" href="#/timeline">Timeline</a>
         </nav>
         <div class="spacer"></div>
+        <span id="live-pill" class="live-pill hidden" title="This report is updating while the tests run"></span>
         <label class="search"><span aria-hidden="true">⌕</span>
           <input id="q" type="search" placeholder="Search tests, tags, errors…" autocomplete="off" aria-label="Search tests">
           <kbd>/</kbd>
@@ -316,6 +328,21 @@
     const executed = stats.total - stats.skipped;
 
     let verdict, headline;
+    const running = meta.live && meta.live.running;
+    if (running) {
+      const planned = meta.live.planned || stats.total;
+      verdict = stats.failed ? 'failed' : 'flaky';
+      headline = stats.total
+        ? `Running… ${stats.total} of ${planned} tests done${stats.failed ? `, ${stats.failed} failed so far` : ''}`
+        : 'Running… waiting for the first test to finish';
+      const parts = [`This page updates as each test finishes.`];
+      if (stats.failed) parts.push(`<b>${plural(stats.failed, 'test')}</b> ${stats.failed === 1 ? 'has' : 'have'} failed so far — open it below without waiting for the run to end.`);
+      else if (stats.total) parts.push('Nothing has failed yet.');
+      return {
+        verdict, headline, text: parts.join(' '), prev: null, newlyBroken: [], fixed: [],
+        chip: stats.failed ? `Running · ${plural(stats.failed, 'failure')} so far` : 'Running',
+      };
+    }
     if (stats.total === 0) { verdict = 'skipped'; headline = 'No tests were run'; }
     else if (stats.failed) { verdict = 'failed'; headline = `${stats.failed} of ${plural(executed, 'test')} failed`; }
     else if (stats.flaky) { verdict = 'flaky'; headline = `All tests passed — ${stats.flaky} ${stats.flaky === 1 ? 'was' : 'were'} flaky`; }
@@ -373,7 +400,7 @@
     view.innerHTML = `
       <section class="card hero">
         <div>
-          <span class="verdict pill ${n.verdict}">${statusIcon(n.verdict)}${{ failed: 'Needs attention', flaky: 'Passed with warnings', passed: 'All clear', skipped: 'Nothing ran' }[n.verdict]}</span>
+          <span class="verdict pill ${n.verdict}">${statusIcon(n.verdict)}${n.chip || { failed: 'Needs attention', flaky: 'Passed with warnings', passed: 'All clear', skipped: 'Nothing ran' }[n.verdict]}</span>
           <h1>${esc(n.headline)}</h1>
           <p class="story-text">${n.text}</p>
           <div class="run-meta">
@@ -447,7 +474,6 @@
     if (filters.sort === 'status') list = [...list].sort((a, b) => rank[a.outcome] - rank[b.outcome]);
     return list;
   }
-  const hayCache = new Map();
   function haystack(t) {
     if (!hayCache.has(t.id)) {
       hayCache.set(t.id, [t.title, t.file, t.project, ...t.describe, ...t.tags, t.owner, t.feature, ...t.issues,
@@ -1180,6 +1206,8 @@
       document.body.style.overflow = '';
       document.removeEventListener('keydown', onKey, true);
       if (lastFocus && lastFocus.focus) lastFocus.focus();
+      // Live updates that arrived while this was open are applied now.
+      if (ui.liveDeferred) { ui.liveDeferred = false; render(); updateLivePill(); }
     };
     const onKey = (ev) => {
       if (ev.key === 'Escape' && !document.querySelector('.overlay')) { ev.preventDefault(); ev.stopPropagation(); close(); }
@@ -1249,7 +1277,13 @@
       clearTimeout(timer);
       if (playing) timer = setTimeout(() => { if (i < items.length - 1) { i++; draw(); } else { playing = false; draw(); } }, DUR);
     };
-    const close = () => { clearTimeout(timer); ov.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey, true); };
+    const close = () => {
+      clearTimeout(timer);
+      ov.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKey, true);
+      if (ui.liveDeferred) { ui.liveDeferred = false; render(); updateLivePill(); }
+    };
     const go = (n) => { i = (n + items.length) % items.length; draw(); };
     const onKey = (e) => {
       if (e.key === 'Escape') close();
@@ -1411,7 +1445,54 @@
     lastRoute = r;
   }
 
+  /* ================================================================ live mode */
+
+  function updateLivePill() {
+    const pill = document.getElementById('live-pill');
+    if (!pill || !meta.live) return;
+    pill.classList.remove('hidden');
+    if (meta.live.running) {
+      const done = stats.total;
+      const planned = meta.live.planned || done;
+      pill.className = 'live-pill running';
+      pill.innerHTML = `<i></i>LIVE <span class="num">${done}/${planned}</span>
+        <span class="live-bar"><span style="width:${planned ? Math.round((done / planned) * 100) : 0}%"></span></span>`;
+    } else {
+      pill.className = 'live-pill done';
+      pill.innerHTML = '✓ Run finished';
+      pill.title = meta.live.reportFile ? `Saved report: ${meta.live.reportFile}` : 'The run has finished';
+    }
+  }
+
+  /** Swap in fresh data without losing the reader's place. */
+  function liveApply(data) {
+    const openOverlay = document.querySelector('.drawer-root, .overlay');
+    applyData(data);
+    updateLivePill();
+    // Never yank the page out from under an open error panel or the story player.
+    if (openOverlay) { ui.liveDeferred = true; return; }
+    const y = window.scrollY;
+    const listTop = document.getElementById('test-list')?.scrollTop;
+    render();
+    window.scrollTo({ top: y });
+    const list = document.getElementById('test-list');
+    if (list && listTop != null) list.scrollTop = listTop;
+  }
+
+  function connectLive() {
+    if (!meta.live || !meta.live.running || typeof EventSource === 'undefined') return;
+    const source = new EventSource('events');
+    const onData = (e) => { try { liveApply(JSON.parse(e.data)); } catch { /* ignore a bad frame */ } };
+    source.addEventListener('snapshot', onData);
+    source.addEventListener('update', onData);
+    source.addEventListener('finished', (e) => { onData(e); source.close(); });
+    source.onerror = () => { /* EventSource retries on its own */ };
+    window.addEventListener('beforeunload', () => source.close());
+  }
+
   shell();
+  updateLivePill();
+  connectLive();
   document.addEventListener('mousemove', onMove);
   document.addEventListener('click', onClick);
   document.addEventListener('change', onChange);

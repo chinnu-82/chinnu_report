@@ -22,6 +22,13 @@ const DEFAULTS = {
   timestampedRuns: false,
   /** How many timestamped run folders to keep. Older ones are deleted. 0 keeps everything. */
   keepRuns: 30,
+  /**
+   * Live mode: serve the report on localhost and update it as each test finishes,
+   * instead of waiting for the run to end. `true`, `false`, or { port, open, hold }.
+   * Also switched on with AURORA_LIVE=1. Never runs on CI.
+   */
+  live: false,
+
   /** 'always' | 'never' | 'on-failure' — open the report in your browser when the run ends. */
   open: 'on-failure',
   /** Embed every screenshot/video into index.html so the report is a single portable file. */

@@ -1,6 +1,6 @@
 {
   "name": "aurora-report",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A stunning, story-driven test report for Playwright: step recording, screenshots, videos, plain-English failure analysis and charts.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "test": "playwright test",
+    "test:live": "node bin/aurora-report.js live",
     "report": "node bin/aurora-report.js open",
     "docs:pdf": "node tools/make-pdf.js docs/TUTORIAL.md docs/Aurora-Report-Tutorial.pdf && node tools/make-pdf.js docs/GUIDE.md docs/Aurora-Report-Guide.pdf"
   },

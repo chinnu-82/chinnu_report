@@ -597,6 +597,34 @@ Every step, with copy-paste examples for JavaScript, TypeScript and ES modules, 
 - [Recording steps](GUIDE.md#4-recording-steps) · [Screenshots](GUIDE.md#5-screenshots) · [Videos and traces](GUIDE.md#6-videos-and-traces)
 - [Configuration](GUIDE.md#11-configuration) · [Running in CI](GUIDE.md#13-running-in-ci) · [Troubleshooting](GUIDE.md#16-troubleshooting)
 
+### Watch it live while the tests run
+
+A long suite makes you wait. Live mode doesn't:
+
+```bash
+npx aurora-report live          # or: npm run test:live
+```
+
+The run prints an address straight away, and the page fills in as each test finishes:
+
+![The report while the tests are still running](images/22-live-running.png)
+
+A **LIVE** badge in the header counts the progress:
+
+![The live badge](images/23-live-pill.png)
+
+You can open a failure and start debugging before the rest of the suite has finished. Counts correct themselves as the run goes — a test that fails and then passes on a retry moves from failed to flaky in front of you. When everything is done the badge turns into **✓ Run finished**, and the usual file report is written as well.
+
+Open an error panel or the story player and updates pause rather than pulling the page around; they are applied when you close it.
+
+Turn it on permanently in `aurora.config.js`:
+
+```js
+live: true,                       // or { port: 5000, open: false, hold: 120 }
+```
+
+It listens on localhost only, and switches itself off on CI where nobody is watching.
+
 ### Keyboard shortcuts worth remembering
 
 | Key | Does |

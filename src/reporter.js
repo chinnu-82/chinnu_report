@@ -8,6 +8,21 @@ const { resolveConfig } = require('./config');
 const { analyzeError, stripAnsi, CATEGORY_LABELS } = require('./errors');
 const { renderReport } = require('./render');
 const { renderRunsIndex } = require('./runs-index');
+const { startLiveServer } = require('./live');
+
+/** `live` accepts true, false, or { port, open, hold }. Never on in CI. */
+function resolveLiveOptions(value) {
+  const envOn = process.env.AURORA_LIVE === '1' || process.env.AURORA_LIVE === 'true';
+  const base = { enabled: false, port: 4321, open: true, hold: 0 };
+  let opts;
+  if (value === true) opts = { ...base, enabled: true };
+  else if (!value) opts = { ...base };
+  else opts = { ...base, ...value, enabled: value.enabled !== false };
+
+  if (envOn) opts.enabled = true;            // asking for it on this run wins
+  if (process.env.CI) opts.enabled = false;  // pointless on a build agent
+  return opts;
+}
 const { STORY_ATTACHMENT, DIAGNOSTICS_ATTACHMENT } = require('./fixtures-constants');
 
 const MIME_EXT = {
@@ -44,6 +59,9 @@ class AuroraReporter {
 
     fs.rmSync(this.assetsDir, { recursive: true, force: true });
     fs.mkdirSync(this.assetsDir, { recursive: true });
+
+    this.liveOptions = resolveLiveOptions(this.cfg.live);
+    if (this.liveOptions.enabled) this.startLive();
   }
 
   onTestEnd(test, result) {
@@ -58,10 +76,54 @@ class AuroraReporter {
     } catch (e) {
       console.warn(`[aurora] Could not process result for "${test.title}": ${e.stack}`);
     }
+    this.pushLive();
+  }
+
+  /** Starts the live server and tells the user where to look. */
+  startLive() {
+    const { port, open } = this.liveOptions;
+    this.livePending = startLiveServer({
+      port,
+      getData: () => this.liveData(),
+      getRunDir: () => this.runDir,
+    }).then((live) => {
+      this.live = live;
+      console.log(`\n  ⚡ Aurora live report  ${live.url}\n     updating as tests finish — the file report is written when the run ends\n`);
+      if (open) openInBrowser(live.url);
+      return live;
+    }).catch((e) => {
+      console.warn(`[aurora] Live mode could not start: ${e.message}`);
+      this.liveOptions.enabled = false;
+    });
+  }
+
+  /** The latest snapshot, rebuilt at most a few times a second. */
+  liveData() {
+    if (!this.liveSnapshot || Date.now() - this.liveSnapshotAt > 150) {
+      this.liveSnapshot = this.buildData(
+        { status: 'running', startTime: new Date(this.startedAt), duration: Date.now() - this.startedAt },
+        { partial: true },
+      );
+      this.liveSnapshotAt = Date.now();
+    }
+    return this.liveSnapshot;
+  }
+
+  pushLive() {
+    if (!this.live || this.liveTimer) return;
+    // Batch bursts of finishing tests into one update.
+    this.liveTimer = setTimeout(() => {
+      this.liveTimer = null;
+      this.liveSnapshot = null;
+      try { this.live.push(this.liveData()); } catch { /* the page went away */ }
+    }, 250);
+    this.liveTimer.unref?.();
   }
 
   async onEnd(fullResult) {
     try {
+      if (this.livePending) await this.livePending;
+      clearTimeout(this.liveTimer);
       const data = this.buildData(fullResult);
       fs.mkdirSync(this.runDir, { recursive: true });
       fs.writeFileSync(path.join(this.runDir, 'index.html'), renderReport(data), 'utf8');
@@ -79,10 +141,25 @@ class AuroraReporter {
       }
       console.log(`\n  ✨ Aurora report  ${line}\n     ${pathToUrl(file)}${indexNote}\n`);
 
+      if (this.live) {
+        // Hand the open page the finished run, then stay up for a moment so it arrives.
+        this.live.push({ ...data, meta: { ...data.meta, live: { running: false, reportFile: pathToUrl(file) } } }, 'finished');
+        const hold = this.liveOptions.hold;
+        if (hold > 0) {
+          console.log(`  ⚡ Live report stays at ${this.live.url} for ${hold}s — press Ctrl+C to stop sooner\n`);
+          await new Promise((resolve) => setTimeout(resolve, hold * 1000));
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+        await this.live.close();
+      }
+
       const open = this.cfg.open;
-      if (!process.env.CI && (open === 'always' || (open === 'on-failure' && stats.failed > 0))) openInBrowser(file);
+      const alreadyOpen = this.liveOptions && this.liveOptions.enabled && this.liveOptions.open;
+      if (!process.env.CI && !alreadyOpen && (open === 'always' || (open === 'on-failure' && stats.failed > 0))) openInBrowser(file);
     } catch (e) {
       console.error(`[aurora] Failed to write report: ${e.stack}`);
+      if (this.live) await this.live.close().catch(() => {});
     }
   }
 
@@ -148,7 +225,7 @@ class AuroraReporter {
       retry: result.retry,
       status: result.status,
       duration: result.duration,
-      start: new Date(result.startTime).getTime(),
+      startedAt: new Date(result.startTime).getTime(),
       worker: result.workerIndex,
       lane: result.parallelIndex ?? result.workerIndex,
       errors,
@@ -201,7 +278,8 @@ class AuroraReporter {
     return asset;
   }
 
-  buildData(fullResult) {
+  /** `partial` builds a snapshot mid-run for live mode: no history is written. */
+  buildData(fullResult, { partial = false } = {}) {
     const cfg = this.cfg;
     const runStart = fullResult.startTime ? new Date(fullResult.startTime).getTime() : this.startedAt;
     const tests = [];
@@ -216,8 +294,9 @@ class AuroraReporter {
       const ann = test.annotations || [];
       const pick = (type) => ann.filter((a) => a.type === type).map((a) => a.description);
 
-      attempts.forEach((a) => { a.start -= runStart; });
-      const last = attempts[attempts.length - 1] || {};
+      // Copy rather than mutate: live mode rebuilds this many times per run.
+      const relative = attempts.map((a) => ({ ...a, start: a.startedAt - runStart }));
+      const last = relative[relative.length - 1] || {};
 
       tests.push({
         id,
@@ -236,10 +315,10 @@ class AuroraReporter {
         links: pick('link').map((l) => { const [label, url] = l.includes('|') ? l.split('|') : [l, l]; return { label, url }; }),
         annotations: ann.filter((a) => !['severity', 'owner', 'feature', 'description', 'issue', 'bug', 'link'].includes(a.type)),
         outcome,
-        duration: attempts.reduce((s, a) => s + (a.duration || 0), 0),
+        duration: relative.reduce((s, a) => s + (a.duration || 0), 0),
         lastDuration: last.duration || 0,
         slow: (last.duration || 0) >= cfg.slowTestThreshold,
-        attempts,
+        attempts: relative,
       });
     }
 
@@ -250,10 +329,11 @@ class AuroraReporter {
     stats.retries = tests.reduce((s, t) => s + Math.max(0, t.attempts.length - 1), 0);
     stats.status = fullResult.status;
 
-    const history = this.updateHistory(stats, tests, runStart);
+    const history = this.updateHistory(stats, tests, runStart, partial);
 
     return {
       meta: {
+        live: partial ? { running: true, planned: this.totalPlanned } : null,
         title: cfg.title,
         subtitle: cfg.subtitle,
         logo: resolveLogo(cfg.logo),
@@ -284,11 +364,17 @@ class AuroraReporter {
     };
   }
 
-  updateHistory(stats, tests, runStart) {
+  updateHistory(stats, tests, runStart, partial = false) {
     const file = path.join(this.outDir, 'history.json');
     let hist = { runs: [], tests: {} };
     if (this.cfg.history.enabled) {
       try { hist = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* first run */ }
+    }
+    // Mid-run snapshots must not append to the history on disk.
+    if (partial) {
+      const stability = {};
+      for (const t of tests) stability[t.id] = (hist.tests || {})[t.key] || [];
+      return { runs: hist.runs || [], stability };
     }
     const keep = this.cfg.history.keep;
     hist.runs = [...(hist.runs || []), {

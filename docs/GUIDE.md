@@ -1040,6 +1040,7 @@ module.exports = defineAuroraConfig({
   subtitle: 'Nightly regression',        // defaults to the run date
   logo: './assets/logo.svg',             // file path (embedded) or https:// URL
   outputDir: 'aurora-report',
+  live: false,                           // true = watch the report while the tests run
   timestampedRuns: false,                // true = keep every run in its own <timestamp> folder
   keepRuns: 30,                          // how many run folders to keep (0 = keep them all)
   open: 'on-failure',                    // 'always' | 'never' | 'on-failure' (never opens when CI is set)
@@ -1149,6 +1150,53 @@ environment: {
 singleFile: true,
 capture: { video: 'off', stepScreenshots: 'on-failure' }, // keeps the file small
 ```
+
+### Live mode: watch the report while the tests run
+
+Normally the report appears when the run ends. In live mode Aurora serves it on localhost straight away and updates it as each test finishes — useful when a long suite is running and you want to look at the first failure without waiting.
+
+```js
+live: true,             // or: { port: 4321, open: true, hold: 0 }
+```
+
+Or without touching the config, for one run:
+
+```bash
+AURORA_LIVE=1 npx playwright test          # bash
+$env:AURORA_LIVE=1; npx playwright test    # PowerShell
+```
+
+The run prints the address as it starts:
+
+```
+  ⚡ Aurora live report  http://localhost:4321/
+     updating as tests finish — the file report is written when the run ends
+```
+
+What you get:
+
+- A **LIVE** badge in the header with a progress bar — `LIVE 8/20`.
+- The headline reads *"Running… 8 of 20 tests done, 1 failed so far"*.
+- Tests, stories, screenshots and failures appear as they complete. Screenshots are served from the run folder, so they work while the run is still going.
+- Counts correct themselves: a test that fails and then passes on retry moves from failed to flaky in front of you.
+- Open an error panel or the story player and updates pause rather than yanking the page around; they are applied when you close it.
+- When the run ends the badge becomes **✓ Run finished** and the page holds the final results.
+
+| Option | Default | What it does |
+|---|---|---|
+| `port` | `4321` | First port to try; the next free one is used if it's taken |
+| `open` | `true` | Open the live page in your browser when the run starts |
+| `hold` | `0` | Seconds to keep the server up after the run ends, so you can keep browsing |
+
+```js
+live: { port: 5000, open: false, hold: 120 },
+```
+
+Notes:
+
+- It listens on `127.0.0.1` only — nothing is exposed to your network.
+- **Live mode never runs on CI** (it switches itself off when `CI` is set), and the file report is still written exactly as usual.
+- With `hold: 0`, the command returns as soon as the run finishes; the page then shows the final data but stops updating. Use `hold` if you want to keep clicking around in the live page afterwards.
 
 ### Keep every run instead of overwriting it
 

@@ -413,6 +413,20 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 .env-table td:first-child { color: var(--muted); width: 38%; }
 
+/* ---------- Live mode ---------- */
+.live-pill {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px;
+  font-size: 12.5px; font-weight: 650; white-space: nowrap;
+}
+.live-pill.running { background: var(--fail-wash); color: var(--fail-ink); }
+.live-pill.running i { width: 8px; height: 8px; border-radius: 50%; background: var(--fail); animation: pulse 1.4s ease-in-out infinite; }
+.live-pill.done { background: var(--pass-wash); color: var(--pass-ink); }
+.live-bar { width: 64px; height: 4px; border-radius: 2px; background: color-mix(in oklab, var(--fail) 22%, transparent); overflow: hidden; }
+.live-bar span { display: block; height: 100%; background: var(--fail); transition: width .3s ease; }
+@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) { .live-pill.running i { animation: none; } }
+@media (max-width: 760px) { .live-bar { display: none; } }
+
 /* ---------- Clickable errors ---------- */
 button.ev-err {
   display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; cursor: pointer;
