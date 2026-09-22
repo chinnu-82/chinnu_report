@@ -54,8 +54,20 @@ const DEFAULTS = {
     video: 'retain-on-failure',
     /** Passed to Playwright use.trace by withAurora(). */
     trace: 'retain-on-failure',
-    /** Record browser console errors & warnings. */
-    console: true,
+    /**
+     * Record browser console messages with everything that was logged — objects
+     * as JSON, Errors with their stack. `true` uses these defaults, `false` turns it off.
+     */
+    console: {
+      enabled: true,
+      /** Add 'info', 'log' or 'debug' to record more than problems. */
+      levels: ['error', 'warning'],
+      /** Read the logged values, not just the message text. */
+      args: true,
+      maxArgSize: 4000,
+      /** Messages to leave out: substring, * wildcard, RegExp or (text) => boolean. */
+      exclude: [],
+    },
     /** Record uncaught page exceptions. */
     pageErrors: true,
     /**

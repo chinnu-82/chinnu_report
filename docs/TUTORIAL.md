@@ -333,6 +333,14 @@ Aurora recorded, with no code in the test:
 
 The test only checked that a button could be clicked, so it passed. The report shows the crash anyway.
 
+### What a console error shows
+
+Each console message is one line until you click it. Open the **Could not load recommendations** error:
+
+![A console error expanded to show every logged value](images/24-console-expanded.png)
+
+The app logged three things in one call — a message, an object with context, and the error itself — and the report keeps them apart: the object as readable JSON, the error with its stack trace pointing at the line that threw. The badges at the top say where it was logged (`/:88:14`) and on which page.
+
 ### What a failed API call shows
 
 Click any failed request to open it. The request that went out is on the left, the response that came back is on the right:

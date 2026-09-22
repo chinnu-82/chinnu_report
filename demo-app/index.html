@@ -81,10 +81,17 @@
         headers: { 'content-type': 'application/json', authorization: 'Bearer super-secret-token' },
         body: JSON.stringify({ customer: 'ada@nimbus.test', cartSize: cart.length, locale: 'en-GB' }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`Recommendations API answered HTTP ${res.status}`);
       const data = await res.json();
       toast(`We suggest: ${data.product}`);
-    } catch {
+    } catch (err) {
+      // What a real app logs: a message, some context, and the error itself.
+      console.error('Could not load recommendations', {
+        endpoint: 'api/recommendations',
+        customer: 'ada@nimbus.test',
+        cart: cart.map((p) => p.name),
+        retrying: false,
+      }, err);
       $('#suggest-error').classList.remove('hidden');
     }
   };

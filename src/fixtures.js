@@ -5,6 +5,7 @@ const { resolveConfig } = require('./config');
 const { stripAnsi } = require('./errors');
 const { STORY_ATTACHMENT, DIAGNOSTICS_ATTACHMENT } = require('./fixtures-constants');
 const { resolveNetworkOptions, shouldRecord, describeRequest, describeResponse } = require('./network');
+const { resolveConsoleOptions, isExcluded, describeArgs } = require('./console-capture');
 
 /** Response bodies being read right now, awaited before the diagnostics are attached. */
 const inFlight = new Set();
@@ -190,18 +191,33 @@ function watchPage(page, diag, started) {
   const at = () => Date.now() - started;
   const add = (list, item) => { if (list.length < LIMIT) list.push({ at: at(), page: page.url(), ...item }); };
 
-  if (cfg.console) {
+  const con = resolveConsoleOptions(cfg.console);
+  const net = resolveNetworkOptions(cfg.network);
+  if (con.enabled) {
     page.on('console', (msg) => {
       const type = msg.type();
-      if (type !== 'error' && type !== 'warning') return;
-      const loc = msg.location();
-      add(diag.console, { type, text: msg.text(), source: loc && loc.url ? `${loc.url}:${loc.lineNumber}` : '' });
+      if (!con.levels.includes(type)) return;
+      const loc = msg.location() || {};
+      const source = loc.url ? `${loc.url}:${loc.lineNumber}${loc.columnNumber ? `:${loc.columnNumber}` : ''}` : '';
+      const text = msg.text();
+      if (isExcluded(text, source, con)) return;
+      // The browser logs its own "Failed to load resource" line for every failed request.
+      // If that URL is excluded from the network report, leave its echo out too.
+      if (net.enabled && loc.url && /^Failed to load resource/.test(text) && !shouldRecord(loc.url, null, net)) return;
+      // Reserve the slot now so messages stay in the order they were logged.
+      const entry = { at: at(), page: page.url(), type, text, source };
+      if (diag.console.length < LIMIT) diag.console.push(entry);
+      // Reading the logged values is async — wait for it before the test ends.
+      const pending = describeArgs(msg, con)
+        .then((args) => { if (args) entry.args = args; })
+        .catch(() => {});
+      inFlight.add(pending);
+      pending.finally(() => inFlight.delete(pending));
     });
   }
   if (cfg.pageErrors) {
-    page.on('pageerror', (err) => add(diag.pageErrors, { message: err.message, stack: err.stack }));
+    page.on('pageerror', (err) => add(diag.pageErrors, { name: err.name, message: err.message, stack: err.stack }));
   }
-  const net = resolveNetworkOptions(cfg.network);
   if (net.enabled) {
     if (net.requestFailures) {
       page.on('requestfailed', (req) => {

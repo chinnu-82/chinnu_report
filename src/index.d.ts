@@ -33,7 +33,8 @@ export interface AuroraOptions {
     fullPage?: boolean;
     video?: 'on' | 'off' | 'retain-on-failure' | 'on-first-retry';
     trace?: 'on' | 'off' | 'retain-on-failure' | 'on-first-retry';
-    console?: boolean;
+    /** true = defaults, false = off, or fine-grained options. */
+    console?: boolean | ConsoleCaptureOptions;
     pageErrors?: boolean;
     /** true = defaults, false = off, or fine-grained options. */
     network?: boolean | NetworkCaptureOptions;
@@ -47,6 +48,18 @@ export interface AuroraOptions {
 
 /** A URL to leave out of (or limit the report to): substring, * wildcard, RegExp, or a predicate. */
 export type UrlPattern = string | RegExp | ((url: string, request?: unknown) => boolean);
+
+export interface ConsoleCaptureOptions {
+  enabled?: boolean;
+  /** Console levels to record (default ['error', 'warning']). */
+  levels?: Array<'error' | 'warning' | 'info' | 'log' | 'debug'>;
+  /** Read the logged values — objects, Errors with stacks — not just the text (default true). */
+  args?: boolean;
+  /** Each logged value is cut off after this many characters (default 4000). */
+  maxArgSize?: number;
+  /** Messages to leave out of the report, matched against the text and the source URL. */
+  exclude?: UrlPattern[];
+}
 
 export interface NetworkCaptureOptions {
   enabled?: boolean;

@@ -821,15 +821,87 @@
     return `<section class="card" id="diag"><div class="card-h"><h3>Browser diagnostics</h3><span class="sub">captured automatically — no code needed</span></div>
       <div class="card-b" style="display:grid;gap:16px">
         ${pageErrors.length ? section(`💥 Uncaught page errors <span class="badge">${pageErrors.length}</span>`,
-          `<table class="tbl"><tr><th>At</th><th>Error</th></tr>${pageErrors.map((p) => `<tr><td class="n">+${fmtDur(p.at)}</td><td><b>${esc(p.message)}</b>
-          ${p.stack ? `<details><summary class="muted" style="cursor:pointer">stack</summary><pre>${esc(p.stack)}</pre></details>` : ''}</td></tr>`).join('')}</table>`) : ''}
-        ${consoleRows.length ? section(`🖥 Console <span class="badge">${consoleRows.length}</span>`,
-          `<table class="tbl"><tr><th>At</th><th>Level</th><th>Message</th></tr>${consoleRows.map((c) => `<tr><td class="n">+${fmtDur(c.at)}</td>
-          <td>${c.type === 'error' ? '<span style="color:var(--fail-ink);font-weight:600">✕ error</span>' : '<span style="color:var(--flaky-ink);font-weight:600">! warning</span>'}</td>
-          <td><span class="mono">${esc(c.text)}</span>${c.source ? `<div class="muted" style="font-size:11.5px">${esc(c.source)}</div>` : ''}</td></tr>`).join('')}</table>`) : ''}
+          `<div class="net-list">${pageErrors.map(pageErrorRow).join('')}</div>`) : ''}
+        ${consoleRows.length ? section(`🖥 Console <span class="badge">${consoleRows.length}</span>
+          <span class="muted" style="font-weight:400;font-size:12px">click a message to see everything that was logged</span>`,
+          `<div class="net-list">${consoleRows.map(consoleRow).join('')}</div>`) : ''}
         ${net.length ? section(`🌐 Failed network requests <span class="badge">${net.length}</span>`,
           `<div class="net-list">${net.map(networkRow).join('')}</div>`) : ''}
       </div></section>`;
+  }
+
+  const LEVEL = {
+    error: { label: 'error', icon: '✕', cls: 'lvl-error' },
+    warning: { label: 'warning', icon: '!', cls: 'lvl-warn' },
+    info: { label: 'info', icon: 'i', cls: 'lvl-info' },
+    log: { label: 'log', icon: '›', cls: 'lvl-info' },
+    debug: { label: 'debug', icon: '·', cls: 'lvl-info' },
+  };
+
+  /** A stack trace with the app's own frames easy to spot. */
+  function stackBlock(stack) {
+    if (!stack) return '';
+    const lines = String(stack).split('\n');
+    return `<pre class="codeframe stack">${lines.map((l) => {
+      const frame = /^\s+at\s/.test(l);
+      return `<span class="${frame ? 'frame' : 'headline'}">${esc(l)}</span>`;
+    }).join('\n')}</pre>`;
+  }
+
+  /** One logged value, shown the way it was logged. */
+  function consoleArg(a, i) {
+    const label = { error: 'Error', element: 'Element', object: 'Object', array: 'Array', string: 'Text', number: 'Number', boolean: 'Boolean', function: 'Function', null: 'null', undefined: 'undefined' }[a.kind] || a.kind;
+    if (a.kind === 'error') {
+      // A stack already starts with "Name: message", so only show the message on its own when there's no stack.
+      const stackHasMessage = a.stack && a.message && a.stack.includes(a.message);
+      return `<div class="net-block"><div class="net-k">Value ${i + 1} · ${esc(a.name || 'Error')}</div>
+        ${stackHasMessage ? '' : `<div class="err-msg">${esc(a.message || '')}</div>`}${stackBlock(a.stack)}</div>`;
+    }
+    return `<div class="net-block"><div class="net-k">Value ${i + 1} · ${label}</div>
+      <pre class="codeframe" style="padding:10px 12px">${esc(a.text ?? '')}</pre></div>`;
+  }
+
+  /** A console message: one line, expanding to everything that was logged. */
+  function consoleRow(c) {
+    const lvl = LEVEL[c.type] || LEVEL.log;
+    const firstLine = String(c.text || '').split('\n')[0];
+    const args = c.args || [];
+    const errors = args.filter((a) => a.kind === 'error');
+    return `<details class="net-item con-item ${lvl.cls}">
+      <summary>
+        <span class="lvl">${lvl.icon} ${lvl.label}</span>
+        <span class="net-url mono" title="${esc(c.text)}">${esc(firstLine)}</span>
+        <span class="muted num">+${fmtDur(c.at)}</span>
+      </summary>
+      <div class="net-body">
+        <div class="net-meta">
+          ${c.source ? `<span class="badge mono" title="Where it was logged">📍 ${esc(c.source)}</span>` : ''}
+          ${c.page ? `<span class="badge" title="Page at the time">🌐 ${esc(c.page)}</span>` : ''}
+          ${args.length ? `<span class="badge">${plural(args.length, 'value')} logged</span>` : ''}
+          ${errors.length ? `<span class="badge" style="color:var(--fail-ink)">includes ${plural(errors.length, 'error object')}</span>` : ''}
+        </div>
+        <div class="net-block"><div class="net-k">Message</div>
+          <pre class="codeframe" style="padding:10px 12px">${esc(c.text || '')}</pre></div>
+        ${args.length > 1 || args.some((a) => a.kind !== 'string') ? args.map(consoleArg).join('') : ''}
+      </div>
+    </details>`;
+  }
+
+  /** An uncaught exception: the message, expanding to the stack. */
+  function pageErrorRow(p) {
+    return `<details class="net-item con-item lvl-error">
+      <summary>
+        <span class="lvl">💥 ${esc(p.name || 'Error')}</span>
+        <span class="net-url mono" title="${esc(p.message)}">${esc(String(p.message || '').split('\n')[0])}</span>
+        <span class="muted num">+${fmtDur(p.at)}</span>
+      </summary>
+      <div class="net-body">
+        <div class="net-meta">${p.page ? `<span class="badge">🌐 ${esc(p.page)}</span>` : ''}
+          <span class="badge" style="color:var(--fail-ink)">not caught by the page</span></div>
+        <div class="net-block"><div class="net-k">Message</div><div class="err-msg">${esc(p.message || '')}</div></div>
+        ${p.stack ? `<div class="net-block"><div class="net-k">Stack trace</div>${stackBlock(p.stack)}</div>` : ''}
+      </div>
+    </details>`;
   }
 
   /** One failed request: a summary line, expanding to the request and the response. */

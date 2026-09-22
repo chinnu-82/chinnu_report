@@ -629,6 +629,48 @@ Turn individual captures off in the config:
 capture: { console: false, network: false, pageErrors: true }
 ```
 
+### Console messages: see everything that was logged
+
+Every console error and warning is listed under **Browser diagnostics → Console**, one line each. Click a line to expand it:
+
+| Shown | Example |
+|---|---|
+| The full message | `Could not load recommendations {endpoint: …} Error: …` |
+| Where it was logged | `http://localhost:3210/:88:14` |
+| The page it happened on | `http://localhost:3210/` |
+| **Each value that was logged, separately** | objects as pretty JSON, Errors with their stack, DOM elements as HTML |
+
+So an app that logs
+
+```js
+console.error('Could not load recommendations', { endpoint, customer, cart }, err);
+```
+
+shows three values in the report: the text, the object as JSON, and the Error with its full stack trace — not `[object Object]`.
+
+Uncaught page errors expand the same way, to the message and the stack.
+
+Control what is recorded:
+
+```js
+capture: {
+  console: {
+    levels: ['error', 'warning'],   // add 'info', 'log', 'debug' to see more
+    args: true,                     // read the logged values, not just the text
+    maxArgSize: 4000,               // each value is cut off after this many characters
+    exclude: [
+      'Download the React DevTools',
+      /third-party-widget/,
+      (text) => text.startsWith('[HMR]'),
+    ],
+  },
+},
+```
+
+`exclude` is matched against both the message and the URL it came from. Use `console: false` to turn console capture off entirely.
+
+> The browser logs its own `Failed to load resource` line for every failed request. If you exclude a URL from the **network** report, that echo is left out of the console list too, so one `exclude` entry keeps an API out of both.
+
 ### Failed requests: what went out and what came back
 
 Every failed request is recorded with both sides of the conversation, so you can debug an API failure without re-running anything:
@@ -1058,7 +1100,11 @@ module.exports = defineAuroraConfig({
     fullPage: false,
     video: 'retain-on-failure',          // applied by withAurora()
     trace: 'retain-on-failure',          // applied by withAurora()
-    console: true,
+    console: {                             // true = defaults, false = off
+      levels: ['error', 'warning'],        // add 'info', 'log', 'debug' for more
+      args: true,                          // objects, Errors and stacks, not just text
+      exclude: [],                         // messages to leave out
+    },
     pageErrors: true,
     network: {                             // true = defaults, false = off
       failedStatus: 400,                   // responses at or above this count as failures
